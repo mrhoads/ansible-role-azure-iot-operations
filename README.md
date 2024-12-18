@@ -55,7 +55,7 @@ If using Ansible Vault to store the service principal credentials, add `--ask-va
 License
 -------
 
-BSD
+GPLv3
 
 Author Information
 ------------------

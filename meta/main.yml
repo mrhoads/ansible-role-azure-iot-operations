@@ -1,3 +1,6 @@
+---
+dependencies: []
+
 galaxy_info:
   author: Mike Rhoads
   description: Azure IoT Operations
@@ -7,7 +10,6 @@ galaxy_info:
     - IoT
     - Azure
     - Arc
-  dependencies: []
   platforms:
     - name: Ubuntu
       versions:

@@ -1,0 +1,16 @@
+galaxy_info:
+  author: Mike Rhoads
+  description: Azure IoT Operations
+  license: license (GPL-3.0-only)
+  min_ansible_version: 2.1
+  galaxy_tags: 
+    - IoT
+    - Azure
+    - Arc
+  dependencies: []
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+

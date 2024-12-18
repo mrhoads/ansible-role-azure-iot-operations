@@ -1,0 +1,55 @@
+---
+- name: debug SA name
+  debug:
+    msg: "The storage account name is {{ storage_account_name }}"
+- name: Create storage account for schema registry
+  azure_rm_storageaccount:
+    resource_group: "{{ azure_arc_resource_group }}"
+    name: "{{ storage_account_name }}"
+    account_type: Standard_GRS
+    location: "{{ azure_arc_location }}"
+    kind: StorageV2
+    is_hns_enabled: true
+    allow_shared_key_access: true
+  register: storage_account
+
+- name: Debug storage account
+  debug:
+    var: storage_account
+
+- name: Create container for schema registry
+  azure_rm_storageblob:
+    resource_group: "{{ azure_arc_resource_group }}"
+    container: "schemaregistry"
+    account_name: "{{ storage_account_name }}"
+    auth_source: cli
+  register: schema_registry
+
+- name: Debug schema registry
+  debug:
+    var: schema_registry
+
+- name: Get Storage Account ID
+  command: >
+    az storage account show --name {{ storage_account_name }} --resource-group {{ azure_arc_resource_group }} -o tsv --query id
+  register: storage_resource_id
+
+- name: Create schema registry
+  command: >
+    az iot ops schema registry create --name {{ azure_aio_schema_registry_name }}
+    --resource-group {{ azure_arc_resource_group }} --registry-namespace {{ storage_account.state.name}}
+    --location {{ azure_arc_location }} --sa-container "schemaregistry"
+    --sa-resource-id {{ storage_account.state.id }} --output json
+  register: schema_registry
+
+- name: Debug schema registry
+  debug:
+    var: schema_registry
+
+- name: Extract schema registry ID
+  set_fact:
+    schema_registry_id: "{{ (schema_registry.stdout_lines | join('')) | from_json | json_query('id') }}"
+
+- name: Debug schema registry
+  debug:
+    var: schema_registry_id

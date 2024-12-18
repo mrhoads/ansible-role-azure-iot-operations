@@ -1,0 +1,8 @@
+---
+# vars file for azure_iot_ops_role
+
+azure_arc_resource_group: "test-ansible-k3s-rg"
+azure_arc_cluster_name: "ansibletest"
+azure_arc_location: "eastus2"
+azure_aio_schema_registry_name: "schemaregistry"
+storage_account_name: "{{ lookup('ansible.builtin.password', '/dev/null', length=13, chars=['ascii_letters', 'digits'], seed=inventory_hostname) | lower }}"

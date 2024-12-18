@@ -1,0 +1,136 @@
+---
+# tasks file for azure_iot_ops_role
+- name: Include vars
+  include_vars:
+    dir: vars
+- name: Configure sysctl limits for AIO
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { key: 'fs.inotify.max_user_instances', value: '8192' }
+    - { key: 'fs.inotify.max_user_watches', value: '524288' }
+    - { key: 'fs.file-max', value: '100000' }
+  become: true
+
+- name: Ensure required packages are installed
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Method apt - Add Microsoft repository GPG key.
+  ansible.builtin.get_url:
+    url: https://packages.microsoft.com/keys/microsoft.asc
+    dest: /etc/apt/keyrings/microsoft.asc
+  become: true
+
+- name: Method apt - Add Microsoft repo for Azure CLI
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.asc] https://packages.microsoft.com/repos/azure-cli/ {{ ansible_distribution_release }} main"
+  become: true
+
+- name: Method apt - Install Azure CLI (az)
+  ansible.builtin.apt:
+    name: "azure-cli"
+    state: latest
+    update_cache: true
+  become: true
+
+- name: Login to Azure CLI
+  command: >
+    az login --service-principal
+      -u {{ azure_service_principal.client_id }}
+      -p {{ azure_service_principal.client_secret }}
+      --tenant {{ azure_service_principal.tenant_id }}
+
+- name: Install connectedk8s CLI extension
+  command: >
+    az extension add --upgrade --name connectedk8s
+  
+- name: Create .kube directory
+  file:
+    path: ~/.kube
+    state: directory
+  
+- name: Copy k3s config to local .kube directory
+  shell: |
+    sudo KUBECONFIG=~/.kube/config:/etc/rancher/k3s/k3s.yaml kubectl config view --flatten > ~/.kube/merged
+    mv ~/.kube/merged ~/.kube/config
+    chmod  0600 ~/.kube/config
+    export KUBECONFIG=~/.kube/config
+    kubectl config use-context default
+    sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+
+- name: Check if cluster is already connected to Azure Arc
+  command: az connectedk8s show --name {{ azure_arc_cluster_name }} --resource-group {{ azure_arc_resource_group }}
+  register: arc_status
+  ignore_errors: true
+
+- name: Connect k3s cluster to Azure Arc
+  command: >
+    az connectedk8s connect
+      --name {{ azure_arc_cluster_name }}
+      --resource-group {{ azure_arc_resource_group }}
+      --location {{ azure_arc_location }}
+      --enable-oidc-issuer --enable-workload-identity --disable-auto-upgrade
+  when: arc_status.failed
+
+- name: Get OIDC issuer URL
+  command: >
+   az connectedk8s show
+    --resource-group {{ azure_arc_resource_group }}
+    --name {{ azure_arc_cluster_name }}
+    --query oidcIssuerProfile.issuerUrl
+    --output tsv
+  register: oidc_issuer_url
+
+- name: Debug OIDC issuer URL
+  debug:
+    var: oidc_issuer_url.stdout
+
+- name: Template k3s config
+  template:
+    src: templates/k3s-config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+  become: true
+  notify: Restart k3s
+
+- name: Get ObjectID for Azure Arc service
+  command:
+    az ad sp show --id bc313c14-388c-4e7d-a58e-70017303ee3b --query id -o tsv
+  register: azure_arc_object_id
+
+- name: Debug ObjectID
+  debug:
+    var: azure_arc_object_id
+
+- name: Enable Custom Locations and Cluster Connect
+  command: >
+    az connectedk8s enable-features
+      --name {{ azure_arc_cluster_name }}
+      --resource-group {{ azure_arc_resource_group }}
+      --custom-locations-oid {{ azure_arc_object_id.stdout }} --features cluster-connect custom-locations
+
+- name: Flush handlers
+  meta: flush_handlers
+
+
+- name: Install azure-iot-operations CLI extension
+  command: >
+    az extension add --upgrade --name azure-iot-ops
+
+
+- name: Import schema registry playbook
+  ansible.builtin.include_tasks: schema-registry.yml
+
+- name: Import AIO playbook
+  ansible.builtin.include_tasks: aio.yml

@@ -1,0 +1,23 @@
+
+- name: Set AIO instance name
+  set_fact:
+    aio_instance_name: "{{ azure_arc_cluster_name }}-aio"
+    
+- name: Check if AIO instance is already created
+  command: az iot ops show --name {{ aio_instance_name }} --resource-group {{ azure_arc_resource_group }}
+  register: aio_status
+  ignore_errors: true
+
+- name: Debug AIO status
+  debug:
+    var: aio_status
+
+- name: AIO init
+  command: >
+    az iot ops init --cluster {{ azure_arc_cluster_name }} --resource-group {{ azure_arc_resource_group }} 
+  when: aio_status.failed or (aio_status.stdout | from_json).properties.provisioningState != 'Succeeded'
+
+- name: AIO create
+  command: >
+    az iot ops create --cluster {{ azure_arc_cluster_name }} --resource-group {{ azure_arc_resource_group }} --name {{ aio_instance_name }} --sr-resource-id {{ schema_registry_id }} --add-insecure-listener
+  when: aio_status.failed or (aio_status.stdout | from_json).properties.provisioningState != 'Succeeded'

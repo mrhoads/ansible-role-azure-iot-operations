@@ -1,0 +1,3 @@
+kube-apiserver-arg:
+ - service-account-issuer={{ oidc_issuer_url.stdout_lines[0] }}
+ - service-account-max-token-expiration=24h

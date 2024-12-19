@@ -1,4 +1,4 @@
-Role Name
+Ansible Role: azure-iot-operations
 =========
 
 This role onboards a k3s cluster to Azure Arc, creates a storage account and schema registry, and then deploys Azure IoT Operations on the cluster.
